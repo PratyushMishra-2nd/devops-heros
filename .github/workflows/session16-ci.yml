@@ -1,0 +1,125 @@
+# Session 16 mini-project: real CI for the build-test pipeline app.
+# Only workflows in the repo-root .github/workflows/ are run by GitHub, so the
+# copies inside the session-16 subfolders never trigger. This one does.
+name: Session 16 CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'session-16-github-actions/**'
+      - '.github/workflows/session16-ci.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: session16-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  APP_DIR: "session-16-github-actions/09-build-test-pipeline 10-33-34-262"
+  FINAL_DIR: "session-16-github-actions/session-16-github-actions/10-final-cicd-pipeline"
+  PYTHON_VERSION: "3.11"
+
+jobs:
+  lint:
+    name: Lint (flake8)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ env.APP_DIR }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: ${{ env.APP_DIR }}/requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run flake8
+        run: flake8 app.py tests/
+
+  test:
+    name: Test (pytest + coverage)
+    runs-on: ubuntu-latest
+    needs: lint
+    defaults:
+      run:
+        working-directory: ${{ env.APP_DIR }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: ${{ env.APP_DIR }}/requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      # "python -m pytest" (not bare "pytest") so the app dir is on sys.path
+      # and "from app import ..." resolves.
+      - name: Run tests with coverage
+        run: |
+          python -m pytest tests/ \
+            --junitxml=test-results/results.xml \
+            --cov=app \
+            --cov-report=xml:coverage.xml \
+            --cov-report=term-missing
+
+      # upload-artifact paths are relative to the workspace root, not to
+      # defaults.run.working-directory, so the full path is needed here.
+      - name: Upload test results and coverage
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: session16-test-results
+          path: |
+            ${{ env.APP_DIR }}/test-results/
+            ${{ env.APP_DIR }}/coverage.xml
+          retention-days: 7
+
+  build:
+    name: Build calculator artifact
+    runs-on: ubuntu-latest
+    needs: test
+    defaults:
+      run:
+        working-directory: ${{ env.FINAL_DIR }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Run calculator tests
+        run: |
+          pip install -r requirements.txt
+          pytest -v
+
+      - name: Build
+        run: |
+          chmod +x build.sh
+          ./build.sh
+          cat build/build-info.txt
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v5
+        with:
+          name: session16-calculator-build
+          path: ${{ env.FINAL_DIR }}/build/
+          retention-days: 7
