@@ -3,6 +3,10 @@ kind: PersistentVolumeClaim
 metadata:
   name: student-pvc
 spec:
+  # Fix: without this line the cluster's default StorageClass ("standard" on
+  # minikube) is injected, the PVC gets a brand-new dynamic PV and student-pv
+  # is never used. An explicit empty string means "static binding only".
+  storageClassName: ""
   accessModes:
     - ReadWriteOnce
   resources:
