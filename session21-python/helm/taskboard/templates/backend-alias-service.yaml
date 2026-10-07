@@ -1,0 +1,18 @@
+# Added by Pratyush. frontend/nginx.conf proxies /api to http://backend:8000 (the
+# docker-compose service name). In this chart the backend Service is called
+# <release>-taskboard-backend, so nginx failed at startup with
+#   [emerg] host not found in upstream "backend"
+# and the frontend Pods sat in CrashLoopBackOff. This second Service gives the
+# same backend Pods the DNS name "backend" so the image works unchanged in both
+# docker compose and Kubernetes.
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend
+  labels: {app: taskboard-backend-alias}
+spec:
+  selector: {app: taskboard-backend}
+  ports:
+    - port: 8000
+      targetPort: 8000
+      name: http

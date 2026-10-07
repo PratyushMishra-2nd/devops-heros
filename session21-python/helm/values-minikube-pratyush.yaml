@@ -1,0 +1,28 @@
+# Pratyush's values override for running the instructor's chart on minikube.
+# Used together with helm/taskboard/values.yaml (the defaults) like this:
+#
+#   helm upgrade --install taskboard ./helm/taskboard -n taskboard \
+#     -f helm/values-minikube-pratyush.yaml
+#
+# Images: built locally from ./backend and ./frontend, tagged :local and pushed
+# into the minikube node with `minikube image load` (no registry involved).
+# A non-"latest" tag makes Kubernetes default to imagePullPolicy IfNotPresent,
+# so it uses the loaded image instead of trying to pull from Docker Hub.
+frontend:
+  image: taskboard-frontend
+  tag: local
+backend:
+  image: taskboard-backend
+  tag: local
+
+# Same as values-dev.yaml: turn the Ingress on for http://taskboard.local
+ingress:
+  enabled: true
+  host: taskboard.local
+
+# Keep the HPA from values.yaml (2..6 replicas at 60% CPU) so it can be demoed.
+hpa:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 6
+  targetCPUUtilizationPercentage: 60
