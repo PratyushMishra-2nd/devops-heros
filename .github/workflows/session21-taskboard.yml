@@ -1,0 +1,137 @@
+# Session 21 capstone: CI/CD for the instructor's TaskBoard project.
+# Adapted from session21-python/.github/workflows/ci-cd.yml. GitHub only runs
+# workflows from the repo-root .github/workflows/, so the copy inside the
+# session folder never triggers; this one does.
+#
+# Same job structure as the instructor's file:
+#   test (pytest + frontend build) -> build-scan-push (docker build, Trivy, GHCR) -> deploy
+# Changes: paths filter + workflow_dispatch, working-directory/context paths point
+# into session21-python/, GHCR names are lowercased (the repo owner has capitals),
+# and the deploy job is switched off because there is no cluster for it to reach.
+name: Session 21 TaskBoard CI/CD
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'session21-python/**'
+      - '.github/workflows/session21-taskboard.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: session21-taskboard-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  APP_DIR: session21-python
+  REGISTRY: ghcr.io
+  TRIVY_IMAGE: aquasec/trivy:0.75.0
+
+jobs:
+  test:
+    name: Test (pytest + frontend build)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - name: Install backend dependencies
+        run: pip install -r requirements.txt
+        working-directory: ${{ env.APP_DIR }}/backend
+
+      - name: Run backend tests
+        run: pytest -v
+        working-directory: ${{ env.APP_DIR }}/backend
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+
+      - name: Build frontend
+        run: npm install && npm run build
+        working-directory: ${{ env.APP_DIR }}/frontend
+
+  build-scan-push:
+    name: Build, Trivy scan, push to GHCR
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v5
+
+      # GHCR image names must be lowercase; github.repository_owner is "PratyushMishra-2nd".
+      - name: Set lowercase image names
+        run: |
+          owner="${GITHUB_REPOSITORY_OWNER,,}"
+          echo "BACKEND_IMAGE=${REGISTRY}/${owner}/taskboard-backend:${GITHUB_SHA}" >> "$GITHUB_ENV"
+          echo "FRONTEND_IMAGE=${REGISTRY}/${owner}/taskboard-frontend:${GITHUB_SHA}" >> "$GITHUB_ENV"
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build images
+        run: |
+          docker build -t "$BACKEND_IMAGE" "$APP_DIR/backend"
+          docker build -t "$FRONTEND_IMAGE" "$APP_DIR/frontend"
+          docker images | grep taskboard
+
+      # Same scan settings as the instructor's trivy-action steps (HIGH,CRITICAL,
+      # ignore-unfixed, exit-code 1), but run with the exact Trivy image version I
+      # scanned with locally, so the CI gate and my laptop give the same answer.
+      - name: Scan backend
+        run: |
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock "$TRIVY_IMAGE" \
+            image --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 "$BACKEND_IMAGE"
+
+      - name: Scan frontend
+        run: |
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock "$TRIVY_IMAGE" \
+            image --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 "$FRONTEND_IMAGE"
+
+      - name: Push images
+        run: |
+          docker push "$BACKEND_IMAGE"
+          docker push "$FRONTEND_IMAGE"
+
+  deploy:
+    # Skipped on purpose. The instructor's deploy job needs a KUBE_CONFIG_DATA
+    # secret for a reachable cluster (EKS in the lesson). I have no AWS account and
+    # my minikube cluster is on my laptop, which GitHub's runners cannot reach, so
+    # there is no secret to give it. I ran the same `helm upgrade --install` by hand
+    # against minikube instead (see session21-python/README.md).
+    # Secrets can't be read in a job-level `if`, so the switch is a repo variable:
+    # set KUBE_DEPLOY_ENABLED=true (and the KUBE_CONFIG_DATA secret) to turn it on.
+    if: ${{ vars.KUBE_DEPLOY_ENABLED == 'true' && github.ref == 'refs/heads/main' }}
+    needs: build-scan-push
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - uses: actions/checkout@v5
+      - uses: azure/setup-helm@v4
+      - name: Configure kubectl
+        env:
+          KUBE_CONFIG_DATA: ${{ secrets.KUBE_CONFIG_DATA }}
+        run: |
+          mkdir -p ~/.kube
+          echo "$KUBE_CONFIG_DATA" | base64 -d > ~/.kube/config
+      - name: Deploy with Helm
+        run: |
+          owner="${GITHUB_REPOSITORY_OWNER,,}"
+          helm upgrade --install taskboard "$APP_DIR/helm/taskboard" -n taskboard --create-namespace \
+            --set backend.tag="$GITHUB_SHA" \
+            --set frontend.tag="$GITHUB_SHA" \
+            --set backend.image="ghcr.io/${owner}/taskboard-backend" \
+            --set frontend.image="ghcr.io/${owner}/taskboard-frontend"

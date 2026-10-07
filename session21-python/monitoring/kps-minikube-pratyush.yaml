@@ -1,0 +1,42 @@
+# Pratyush's extra values for kube-prometheus-stack on a small minikube (~7 GB WSL
+# shared with other labs). Applied on top of the instructor's prometheus-values.yaml:
+#
+#   helm upgrade --install kube-prometheus-stack prometheus-community/kube-prometheus-stack \
+#     -n monitoring --create-namespace \
+#     -f monitoring/prometheus-values.yaml -f monitoring/kps-minikube-pratyush.yaml
+#
+# Only trims what the lab doesn't need; scraping config comes from the instructor's file.
+alertmanager:
+  enabled: false          # no alert routing in this lab, saves a StatefulSet
+
+prometheus:
+  prometheusSpec:
+    retention: 6h
+    resources:
+      requests: {cpu: 100m, memory: 300Mi}
+      limits: {memory: 800Mi}
+
+grafana:
+  adminPassword: taskboard-lab   # local minikube only
+  # Anonymous read-only access so headless Chrome can screenshot dashboards.
+  grafana.ini:
+    auth.anonymous:
+      enabled: true
+      org_role: Viewer
+  resources:
+    requests: {cpu: 100m, memory: 256Mi}
+    # Grafana 13 used 8 cores on first boot and later spiked to 23 cores / 764Mi,
+    # which froze the whole WSL VM. Cap it so it can't starve the node.
+    limits: {cpu: "1", memory: 1Gi}
+  # The chart's bundled Kubernetes dashboards are not needed for this lab (only the
+  # TaskBoard one in grafana-dashboard-taskboard.json is), and fewer dashboards means
+  # less for Grafana to load at startup.
+  defaultDashboardsEnabled: false
+  # First install: Grafana 13 took longer than the chart's 60s liveness delay to
+  # finish its first-boot DB migrations, so it was killed and restarted in a loop
+  # (helm --wait ended with "Progress deadline exceeded"). Give it time to boot.
+  livenessProbe:
+    httpGet: {path: /api/health, port: 3000}
+    initialDelaySeconds: 300
+    timeoutSeconds: 30
+    failureThreshold: 10
