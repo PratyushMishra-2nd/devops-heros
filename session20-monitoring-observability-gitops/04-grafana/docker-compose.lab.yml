@@ -1,0 +1,11 @@
+# Local override used for my lab run (see the session README, section 4).
+# Port 3000 was already taken on my machine by another container, and I wanted
+# a read-only anonymous view so headless Chrome could screenshot the dashboard.
+# Usage: docker compose -f docker-compose.yml -f docker-compose.lab.yml up -d
+services:
+  grafana:
+    ports: !override
+      - "3001:3000"
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer

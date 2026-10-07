@@ -1,0 +1,30 @@
+# My copy of app/argocd-application.yaml with the YOUR_USERNAME placeholder filled in.
+# Kept OUTSIDE app/ on purpose: Argo CD syncs everything under the source path,
+# so an Application manifest inside app/ would be applied by Argo CD itself.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: session20-mini
+  namespace: argocd
+spec:
+  project: default
+
+  source:
+    repoURL: https://github.com/PratyushMishra-2nd/devops-heros.git
+    targetRevision: main
+    path: session20-monitoring-observability-gitops/08-mini-project/app
+    directory:
+      # app/ still holds the template Application with the placeholder repoURL; skip it
+      exclude: argocd-application.yaml
+
+  destination:
+    server: https://kubernetes.default.svc
+    # the manifests in app/ hardcode namespace: session20, so the destination must match
+    namespace: session20
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

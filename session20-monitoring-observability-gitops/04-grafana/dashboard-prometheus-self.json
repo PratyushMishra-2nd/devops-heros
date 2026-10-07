@@ -1,0 +1,36 @@
+{
+  "dashboard": {
+    "uid": "s20-prom-self",
+    "title": "Session 20 - Prometheus self-monitoring",
+    "time": { "from": "now-15m", "to": "now" },
+    "refresh": "5s",
+    "panels": [
+      {
+        "type": "stat", "title": "Targets UP",
+        "gridPos": { "x": 0, "y": 0, "w": 6, "h": 6 },
+        "datasource": { "type": "prometheus", "uid": "prom" },
+        "targets": [ { "refId": "A", "expr": "sum(up)" } ]
+      },
+      {
+        "type": "stat", "title": "Active time series (TSDB head)",
+        "gridPos": { "x": 6, "y": 0, "w": 6, "h": 6 },
+        "datasource": { "type": "prometheus", "uid": "prom" },
+        "targets": [ { "refId": "A", "expr": "prometheus_tsdb_head_series" } ]
+      },
+      {
+        "type": "timeseries", "title": "Prometheus resident memory (MiB)",
+        "gridPos": { "x": 12, "y": 0, "w": 12, "h": 6 },
+        "datasource": { "type": "prometheus", "uid": "prom" },
+        "targets": [ { "refId": "A", "expr": "process_resident_memory_bytes{job=\"prometheus\"} / 1024 / 1024", "legendFormat": "RSS MiB" } ]
+      },
+      {
+        "type": "timeseries", "title": "HTTP requests per second by handler",
+        "gridPos": { "x": 0, "y": 6, "w": 24, "h": 9 },
+        "datasource": { "type": "prometheus", "uid": "prom" },
+        "targets": [ { "refId": "A", "expr": "sum by (handler) (rate(prometheus_http_requests_total[1m])) > 0", "legendFormat": "{{handler}}" } ]
+      }
+    ],
+    "schemaVersion": 41
+  },
+  "overwrite": true
+}

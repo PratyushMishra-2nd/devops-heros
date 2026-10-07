@@ -1,0 +1,29 @@
+# My copy of app/argocd-application.yaml, adapted for my fork and my namespace.
+# Kept OUTSIDE app/ on purpose: Argo CD syncs everything under the source path,
+# so an Application manifest inside app/ would be applied by Argo CD itself.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: s20-gitops-app
+  namespace: argocd
+spec:
+  project: default
+
+  source:
+    repoURL: https://github.com/PratyushMishra-2nd/devops-heros.git
+    targetRevision: main
+    path: session20-monitoring-observability-gitops/07-argocd/app
+    directory:
+      # the upstream app/ folder also contains argocd-application.yaml; skip it
+      exclude: argocd-application.yaml
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: s20-gitops
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
