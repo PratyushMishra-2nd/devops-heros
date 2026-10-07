@@ -514,11 +514,51 @@ Replacements in 1 second, but this one is **not** Argo CD. Pods are not in Git, 
 
 ## 10. GitOps in action: changing Git instead of the cluster
 
-<!-- TODO-GITCHANGE -->
+The only thing I changed was one line in Git: `08-mini-project/app/deployment.yaml`, `replicas: 2` → `replicas: 3`. I committed it, pushed it to my fork, and then just asked Argo CD what it saw. No `kubectl scale`, no `kubectl apply`.
 
-I have the change ready locally: `08-mini-project/app/deployment.yaml` line 9, `replicas: 2` → `replicas: 3`. This section is waiting for that commit to be pushed to my fork, so Argo CD can pick it up and I can capture the result.
+```bash
+$ git log --oneline -1
+d35024b session20: add monitoring and GitOps write-up, scale mini-project to 3
 
-<!-- /TODO-GITCHANGE -->
+$ grep -n replicas app/deployment.yaml
+9:  replicas: 3
+
+$ argocd app get session20-mini --refresh --grpc-web | sed -n '/^Sync Status/,$p'
+Sync Status:        OutOfSync from main (d35024b)
+Health Status:      Healthy
+
+GROUP  KIND        NAMESPACE  NAME            STATUS     HEALTH   HOOK  MESSAGE
+       Namespace              session20       Synced
+       Service     session20  session20-mini  Synced     Healthy
+apps   Deployment  session20  session20-mini  OutOfSync  Healthy
+
+$ kubectl get deploy session20-mini -n session20
+NAME             READY   UP-TO-DATE   AVAILABLE   AGE
+session20-mini   3/3     3            3           12m
+
+$ kubectl get pods -n session20
+NAME                              READY   STATUS    RESTARTS   AGE
+session20-mini-68946db7dd-7ql8v   1/1     Running   0          10m
+session20-mini-68946db7dd-7z62k   1/1     Running   0          10m
+session20-mini-68946db7dd-klm5q   1/1     Running   0          16s
+
+$ argocd app history session20-mini --grpc-web
+SOURCE  https://github.com/PratyushMishra-2nd/devops-heros.git
+ID      DATE                           REVISION
+0       2026-10-07 17:00:35 +0000 UTC  main (0678d7f)
+1       2026-10-07 17:13:15 +0000 UTC  main (d35024b)
+
+$ kubectl get applications -n argocd
+NAME             SYNC STATUS   HEALTH STATUS
+s20-gitops-app   Synced        Healthy
+session20-mini   Synced        Healthy
+```
+
+The refresh caught the moment in between: Argo CD had fetched `d35024b`, compared it to the cluster, and marked only the Deployment `OutOfSync`. The Namespace and Service didn't change in that commit, so they stayed `Synced`. Automated sync applied it straight away. Twenty seconds later there were 3/3 replicas, and the new pod is 16 seconds old next to the two 10-minute-old ones. The history now has a second entry pinned to the exact commit, so rolling back is just syncing to revision 0, which is the same as reverting the commit.
+
+This is the whole point of GitOps. The cluster changed because Git changed, and `git log` is now the audit trail of who scaled what and when.
+
+📸 `screenshots/09-git-change.png`
 
 ---
 
