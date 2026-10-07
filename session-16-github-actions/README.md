@@ -328,7 +328,26 @@ Things I did on purpose, mostly from the problems above:
 
 It passes actionlint (section 7). The full file is at `/.github/workflows/session16-ci.yml`.
 
-<!-- TODO-ACTIONS-RUN -->
+### The live run
+
+Pushing the session commits to `main` touched both `session-16-github-actions/**` and the workflow file, so the path filter matched and GitHub picked it up straight away: [run #1](https://github.com/PratyushMishra-2nd/devops-heros/actions/runs/37659020700) on commit `976c6db`.
+
+```bash
+$ curl -s https://api.github.com/repos/PratyushMishra-2nd/devops-heros/actions/runs/37659020700/jobs | python -c "import json,sys; [print(j['name'],j['conclusion'],j['started_at'],j['completed_at']) for j in json.load(sys.stdin)['jobs']]"
+Lint (flake8) success 2026-10-07T17:26:05Z 2026-10-07T17:26:15Z
+Test (pytest + coverage) success 2026-10-07T17:26:18Z 2026-10-07T17:26:32Z
+Build calculator artifact success 2026-10-07T17:26:34Z 2026-10-07T17:26:43Z
+
+$ curl -s https://api.github.com/repos/PratyushMishra-2nd/devops-heros/actions/runs/37659020700/artifacts | python -c "import json,sys; [print(a['name'],a['size_in_bytes']) for a in json.load(sys.stdin)['artifacts']]"
+session16-calculator-build 902
+session16-test-results 920
+```
+
+It took 41 seconds end to end. Each job only starts after the previous one finishes (lint 17:26:05–17:26:15, test starts 17:26:18, build starts 17:26:34), which is exactly the `needs:` chain doing its job. The gap of a couple of seconds between jobs is GitHub giving each job a fresh runner, which is also why every job does its own checkout. Both artifacts came out of the run, so the test report and the build output can be downloaded from the run page without rerunning anything.
+
+The two warnings in the annotations are GitHub saying `upload-artifact@v5` still targets Node 20. It doesn't break anything today, but it's the kind of thing that will turn into a failure later if nobody bumps the version.
+
+📸 `screenshots/07-session16-ci-run.png`
 
 ---
 
