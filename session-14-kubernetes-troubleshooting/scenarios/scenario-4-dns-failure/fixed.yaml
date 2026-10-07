@@ -1,0 +1,65 @@
+# Fix for scenario 4. Two problems:
+#   1. the hostname postgres-db-wrong-name.production... does not exist
+#      (NXDOMAIN), and there is no "production" namespace on this cluster;
+#   2. curl -s ... || true hid the error, so the pod looked healthy.
+# A real postgres-db Service is created in this lab namespace and the client
+# points at it, with errors left visible.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres-db
+  labels:
+    tier: triage-gauntlet
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres-db
+  template:
+    metadata:
+      labels:
+        app: postgres-db
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:16-alpine
+          env:
+            - name: POSTGRES_PASSWORD
+              value: lab-only-password
+          ports:
+            - containerPort: 5432
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-db
+  labels:
+    tier: triage-gauntlet
+spec:
+  selector:
+    app: postgres-db
+  ports:
+    - port: 5432
+      targetPort: 5432
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: fail-4-dns-failure-pod
+  labels:
+    tier: triage-gauntlet
+    scenario: dns-failure
+spec:
+  containers:
+    - name: client
+      image: curlimages/curl:8.6.0
+      command: ["sh", "-c"]
+      args:
+        - |
+          echo "Attempting connection to internal database...";
+          until nc -z -w 3 postgres-db.s14-scenarios.svc.cluster.local 5432; do
+            echo "postgres-db:5432 not reachable yet, retrying in 3s"; sleep 3;
+          done
+          echo "Connected: postgres-db.s14-scenarios.svc.cluster.local:5432 is reachable";
+          echo "Process sleeping...";
+          sleep 3600

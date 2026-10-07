@@ -6,7 +6,7 @@ metadata:
 
 spec:
   selector:
-    app: web-ahsgdf
+    app: web   # fixed: was "web-ahsgdf", which matched no pods
 
   ports:
     - port: 80

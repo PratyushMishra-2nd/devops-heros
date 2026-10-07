@@ -1,0 +1,14 @@
+# Fix for scenario 2: "yatri-api-service:v999-invalid-tag-does-not-exist" is not
+# a real repository on Docker Hub. There is no public yatri-api-service image at
+# all, so a known-good image stands in for it here.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: fail-2-imagepull-pod
+  labels:
+    tier: triage-gauntlet
+    scenario: imagepull
+spec:
+  containers:
+    - name: web-app
+      image: nginx:1.27

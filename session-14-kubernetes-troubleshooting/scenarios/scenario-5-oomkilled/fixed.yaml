@@ -1,0 +1,31 @@
+# Fix for scenario 5: the script needs ~1GB (100 x 10MiB chunks) but the
+# limit was 20Mi, so the kernel OOM-killed it (exit 137). The limit is raised
+# with headroom and the process is kept alive afterwards so the pod stays
+# Running for verification instead of exiting and being restarted.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: fail-5-oomkilled-pod
+  labels:
+    tier: triage-gauntlet
+    scenario: oomkilled
+spec:
+  containers:
+    - name: memory-leaker
+      image: python:3.11-alpine
+      command:
+        - "python3"
+        - "-c"
+        - |
+          import time
+          print("Allocating memory rapidly...")
+          chunks = []
+          for i in range(100):
+              chunks.append(b"x" * (10 * 1024 * 1024))
+          print(f"Allocated {len(chunks) * 10} MiB without being killed", flush=True)
+          time.sleep(3600)
+      resources:
+        requests:
+          memory: "1100Mi"
+        limits:
+          memory: "1200Mi"

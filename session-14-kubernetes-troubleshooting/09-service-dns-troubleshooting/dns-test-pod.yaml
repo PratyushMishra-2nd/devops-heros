@@ -7,7 +7,7 @@ metadata:
 spec:
   containers:
     - name: dns-test
-      image: registry.k8s.io/e2e-test-images/dnsutils:1.3
+      image: registry.k8s.io/e2e-test-images/jessie-dnsutils:1.3   # fixed: dnsutils:1.3 does not exist on registry.k8s.io
       command:
         - sleep
         - "3600"
